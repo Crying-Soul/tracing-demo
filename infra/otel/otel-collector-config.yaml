@@ -1,0 +1,121 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+  fluent_forward:
+    endpoint: 0.0.0.0:24224
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 400
+    spike_limit_mib: 100
+
+  resource:
+    attributes:
+      - key: deployment.environment
+        value: development
+        action: upsert
+
+  transform/docker_logs:
+    error_mode: ignore
+    log_statements:
+      - context: log
+        statements:
+          - merge_maps(log.cache, ParseJSON(log.body), "upsert") where IsMatch(log.body, "^\\{")
+
+          # имя контейнера приходит с ведущим слешем
+          - replace_pattern(log.attributes["container_name"], "^/", "")
+
+          - set(log.severity_text, "trace")  where Int(log.cache["level"]) == 10
+          - set(log.severity_number, 1)      where Int(log.cache["level"]) == 10
+          - set(log.severity_text, "debug")  where Int(log.cache["level"]) == 20
+          - set(log.severity_number, 5)      where Int(log.cache["level"]) == 20
+          - set(log.severity_text, "info")   where Int(log.cache["level"]) == 30
+          - set(log.severity_number, 9)      where Int(log.cache["level"]) == 30
+          - set(log.severity_text, "warn")   where Int(log.cache["level"]) == 40
+          - set(log.severity_number, 13)     where Int(log.cache["level"]) == 40
+          - set(log.severity_text, "error")  where Int(log.cache["level"]) == 50
+          - set(log.severity_number, 17)     where Int(log.cache["level"]) == 50
+          - set(log.severity_text, "fatal")  where Int(log.cache["level"]) == 60
+          - set(log.severity_number, 21)     where Int(log.cache["level"]) == 60
+
+          # время записи приложением, не приёма коллектором
+          - set(log.time_unix_nano, Int(log.cache["time"]) * 1000000) where log.cache["time"] != nil
+
+          - set(log.trace_id.string, log.cache["trace_id"]) where log.cache["trace_id"] != nil
+          - set(log.span_id.string, log.cache["span_id"])   where log.cache["span_id"] != nil
+
+          - set(log.attributes["event"], log.cache["event"])    where log.cache["event"] != nil
+          - set(log.attributes["logger"], log.cache["context"]) where log.cache["context"] != nil
+          - set(log.attributes["http_method"], log.cache["req"]["method"])     where log.cache["req"] != nil
+          - set(log.attributes["http_route"], log.cache["req"]["url"])         where log.cache["req"] != nil
+          - set(log.attributes["http_status"], log.cache["res"]["statusCode"]) where log.cache["res"] != nil
+          - set(log.attributes["duration_ms"], log.cache["responseTime"])      where log.cache["responseTime"] != nil
+
+          - set(log.body, log.cache["msg"]) where log.cache["msg"] != nil
+
+          - delete_key(log.attributes, "fluent.tag")
+          - delete_key(log.attributes, "container_id")
+
+  # без переноса в ресурс все контейнеры делят один service.name
+  groupbyattrs/docker:
+    keys: [container_name]
+
+  transform/docker_resource:
+    error_mode: ignore
+    log_statements:
+      - context: resource
+        statements:
+          - set(resource.attributes["service.name"], resource.attributes["container_name"]) where resource.attributes["container_name"] != nil
+          - delete_key(resource.attributes, "container_name")
+
+  batch:
+    send_batch_size: 1024
+    timeout: 5s
+
+exporters:
+  otlp_grpc/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+
+  otlp_http/logs:
+    endpoint: http://loki:3100/otlp
+
+  prometheus_remote_write:
+    endpoint: http://prometheus:9090/api/v1/write
+    send_exemplars: true
+
+service:
+  telemetry:
+    metrics:
+      readers:
+        - pull:
+            exporter:
+              prometheus:
+                host: 0.0.0.0
+                port: 8888
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, batch]
+      exporters: [otlp_grpc/tempo]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, batch]
+      exporters: [prometheus_remote_write]
+    logs:
+      receivers: [fluent_forward]
+      processors:
+        - memory_limiter
+        - transform/docker_logs
+        - groupbyattrs/docker
+        - transform/docker_resource
+        - resource
+        - batch
+      exporters: [otlp_http/logs]

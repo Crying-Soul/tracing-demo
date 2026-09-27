@@ -1,0 +1,9 @@
+apiVersion: 1
+
+providers:
+  - name: pet-1
+    folder: pet-1
+    type: file
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana/dashboards

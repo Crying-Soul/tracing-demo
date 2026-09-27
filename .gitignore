@@ -1,0 +1,6 @@
+.env
+*.md
+.claude
+.serena
+.codegraph
+backups
