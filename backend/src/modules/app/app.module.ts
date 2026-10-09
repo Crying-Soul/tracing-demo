@@ -4,12 +4,14 @@ import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { HealthController } from '../health/health.controller.js';
 import { TelemetryService } from '../observability/telemetry.service.js';
+import { DatabaseModule } from '../database/database.module.js';
 import { TerminusModule } from '@nestjs/terminus';
 import { LoggerModule } from 'nestjs-pino';
 import { trace } from '@opentelemetry/api';
 
 @Module({
   imports: [
+    DatabaseModule,
     TerminusModule,
     LoggerModule.forRoot({
       pinoHttp: {

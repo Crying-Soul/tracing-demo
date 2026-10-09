@@ -5,8 +5,8 @@ import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 export class AppService {
   constructor(@InjectPinoLogger(AppService.name) private readonly logger: PinoLogger) {}
 
-  getHello(): string {
-    this.logger.debug({ event: 'hello_requested' }, 'hello requested');
-    return 'Hello World!';
+  ping(): string {
+    this.logger.debug({ event: 'ping' }, 'ping');
+    return 'pong';
   }
 }
