@@ -1,16 +1,19 @@
 import { Controller, Get } from '@nestjs/common';
-import { HealthCheck, HealthCheckService, MemoryHealthIndicator } from '@nestjs/terminus';
+import { HealthCheck, HealthCheckService } from '@nestjs/terminus';
 
 @Controller('health')
 export class HealthController {
-  constructor(
-    private readonly health: HealthCheckService,
-    private readonly memory: MemoryHealthIndicator,
-  ) {}
+  constructor(private readonly health: HealthCheckService) {}
 
-  @Get()
+  // без HealthCheckService: он отвечает 503 после SIGTERM, а процесс в это время жив
+  @Get('live')
+  live() {
+    return { status: 'ok' };
+  }
+
+  @Get('ready')
   @HealthCheck()
-  check() {
-    return this.health.check([() => this.memory.checkHeap('heap', 512 * 1024 * 1024)]);
+  ready() {
+    return this.health.check([]);
   }
 }

@@ -26,7 +26,7 @@ import { trace } from '@opentelemetry/api';
         autoLogging: {
           ignore: (req) => {
             const { originalUrl } = req as IncomingMessage & { originalUrl?: string };
-            return (originalUrl ?? req.url ?? '').split('?')[0] === '/health';
+            return (originalUrl ?? req.url ?? '').startsWith('/health/');
           },
         },
 

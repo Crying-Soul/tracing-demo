@@ -19,9 +19,7 @@ services:
     logging:
       driver: fluentd
       options:
-        # адрес хоста, а не имя сервиса: подключается демон, он вне compose-сети
         fluentd-address: localhost:24224
-        # без async контейнер не стартует, пока коллектор недоступен
         fluentd-async: "true"
         fluentd-retry-wait: "1s"
         fluentd-max-retries: "30"
@@ -173,10 +171,8 @@ services:
     networks:
       - observability-net
     depends_on:
-      tempo:
-        condition: service_healthy
-      loki:
-        condition: service_healthy
+      observability-ready:
+        condition: service_completed_successfully
       prometheus:
         condition: service_healthy
 
@@ -190,12 +186,6 @@ services:
       - ./infra/tempo/tempo.yaml:/etc/tempo.yaml:ro
       - tempo-data:/var/tempo
     networks: [observability-net]
-    healthcheck:
-      test: ["CMD", "/tempo", "--version"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
     depends_on:
       prometheus:
         condition: service_healthy
@@ -210,12 +200,29 @@ services:
       - ./infra/loki/loki-config.yaml:/etc/loki/loki-config.yaml:ro
       - loki-data:/loki
     networks: [observability-net]
-    healthcheck:
-      test: ["CMD", "/usr/bin/loki", "-version"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
+
+  # образы tempo и loki distroless, HTTP-проверку изнутри них сделать нечем
+  observability-ready:
+    image: busybox:1.37
+    container_name: observability-ready
+    profiles: ["observability"]
+    command:
+      - sh
+      - -c
+      - |
+        for url in http://tempo:3200/ready http://loki:3100/ready; do
+          n=0
+          until wget -q -T 2 -O /dev/null "$$url"; do
+            n=$$((n + 1))
+            if [ "$$n" -ge 60 ]; then echo "$$url not ready"; exit 1; fi
+            sleep 2
+          done
+          echo "$$url ready"
+        done
+    networks: [observability-net]
+    depends_on:
+      - tempo
+      - loki
 
   prometheus:
     image: prom/prometheus:v3.14.0
@@ -233,7 +240,7 @@ services:
       - prometheus-data:/prometheus
     networks: [observability-net]
     healthcheck:
-      test: ["CMD", "/bin/promtool", "check", "healthy", "--url=http://127.0.0.1:9090"]
+      test: ["CMD", "/bin/promtool", "check", "ready", "--url=http://127.0.0.1:9090"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -256,10 +263,8 @@ services:
       - grafana-data:/var/lib/grafana
     networks: [observability-net]
     depends_on:
-      tempo:
-        condition: service_healthy
-      loki:
-        condition: service_healthy
+      observability-ready:
+        condition: service_completed_successfully
       prometheus:
         condition: service_healthy
 

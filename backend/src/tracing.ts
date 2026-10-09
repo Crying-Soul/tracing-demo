@@ -18,7 +18,6 @@ export const otelSDK = new NodeSDK({
   }),
   instrumentations: [
     new HttpInstrumentation(),
-    // экземпляр создаёт Nest, подключение через diagnostics_channel
     new FastifyOtelInstrumentation({ registerOnInitialization: true }),
     new PgInstrumentation(),
     new KafkaJsInstrumentation(),
