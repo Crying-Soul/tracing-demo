@@ -5,3 +5,7 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
     CREATE ROLE replicator WITH REPLICATION LOGIN PASSWORD '$REPLICATOR_PASSWORD';
     CREATE DATABASE appdb OWNER postgres;
 EOSQL
+
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname appdb <<-EOSQL
+    CREATE EXTENSION pg_stat_statements;
+EOSQL
