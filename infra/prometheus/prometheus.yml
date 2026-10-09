@@ -7,7 +7,7 @@ storage:
     # remote-write от коллектора и от Tempo приходит вразнобой по времени
     out_of_order_time_window: 10m
 
-# метрики приложения и span-метрики приходят remote-write, ниже только самотелеметрия
+# метрики приложения и span-метрики приходят remote-write
 scrape_configs:
   - job_name: prometheus
     static_configs:
@@ -24,3 +24,30 @@ scrape_configs:
   - job_name: loki
     static_configs:
       - targets: ["loki:3100"]
+
+  - job_name: postgres
+    static_configs:
+      - targets: ["postgres-exporter-master:9187"]
+        labels: { instance: postgres-master }
+      - targets: ["postgres-exporter-slave:9187"]
+        labels: { instance: postgres-slave }
+
+  - job_name: pgbouncer
+    static_configs:
+      - targets: ["pgbouncer-exporter:9127"]
+
+  - job_name: kafka
+    static_configs:
+      - targets: ["kafka-exporter:9308"]
+
+  - job_name: redis
+    static_configs:
+      - targets: ["redis-exporter:9121"]
+
+  - job_name: cadvisor
+    static_configs:
+      - targets: ["cadvisor:8080"]
+
+  - job_name: node
+    static_configs:
+      - targets: ["node-exporter:9100"]
